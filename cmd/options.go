@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dag-andersen/argocd-diff-preview/pkg/cluster"
+	"github.com/dag-andersen/argocd-diff-preview/pkg/k3d"
 	"github.com/dag-andersen/argocd-diff-preview/pkg/kind"
 	"github.com/dag-andersen/argocd-diff-preview/pkg/minikube"
 	"github.com/dag-andersen/argocd-diff-preview/pkg/selector"
@@ -37,6 +38,7 @@ var (
 	DefaultCluster            = "auto"
 	DefaultClusterName        = "argocd-diff-preview"
 	DefaultKindOptions        = ""
+	DefaultK3dOptions         = ""
 	DefaultMaxDiffLength      = uint(65536)
 	DefaultArgocdNamespace    = "argocd"
 	DefaultLogFormat          = "human"
@@ -58,6 +60,7 @@ type Options struct {
 	ClusterType               string `mapstructure:"cluster"`
 	ClusterName               string `mapstructure:"cluster-name"`
 	KindOptions               string `mapstructure:"kind-options"`
+	K3dOptions                string `mapstructure:"k3d-options"`
 	MaxDiffLength             uint   `mapstructure:"max-diff-length"`
 	Selector                  string `mapstructure:"selector"`
 	FilesChanged              string `mapstructure:"files-changed"`
@@ -185,6 +188,8 @@ func Parse() *Options {
 	viper.SetDefault("secrets-folder", DefaultSecretsFolder)
 	viper.SetDefault("cluster", DefaultCluster)
 	viper.SetDefault("cluster-name", DefaultClusterName)
+	viper.SetDefault("kind-options", DefaultKindOptions)
+	viper.SetDefault("k3d-options", DefaultK3dOptions)
 	viper.SetDefault("max-diff-length", DefaultMaxDiffLength)
 	viper.SetDefault("argocd-namespace", DefaultArgocdNamespace)
 	viper.SetDefault("log-format", DefaultLogFormat)
@@ -212,9 +217,10 @@ func Parse() *Options {
 	rootCmd.Flags().StringP("secrets-folder", "s", DefaultSecretsFolder, "Secrets folder where the secrets are read from")
 
 	// Cluster related
-	rootCmd.Flags().String("cluster", DefaultCluster, "Local cluster tool. Options: kind, minikube, auto")
-	rootCmd.Flags().String("cluster-name", DefaultClusterName, "Cluster name (only for kind)")
+	rootCmd.Flags().String("cluster", DefaultCluster, "Local cluster tool. Options: kind, minikube, k3d, auto")
+	rootCmd.Flags().String("cluster-name", DefaultClusterName, "Cluster name")
 	rootCmd.Flags().String("kind-options", DefaultKindOptions, "Kind Options (only for kind)")
+	rootCmd.Flags().String("k3d-options", DefaultK3dOptions, "k3d Options (space separated, only for k3d, e.g. '--servers 3 --api-port 6444')")
 	rootCmd.Flags().Bool("keep-cluster-alive", false, "Keep cluster alive after the tool finishes")
 
 	// Other options
@@ -304,27 +310,34 @@ func (o *Options) ParseRedirectRevisions() []string {
 // ParseClusterType parses the cluster type and returns the appropriate cluster provider
 func (o *Options) ParseClusterType() (cluster.Provider, error) {
 	var provider cluster.Provider
-	switch o.ClusterType {
+	clusterType := strings.ToLower(o.ClusterType)
+
+	switch clusterType {
 	case "kind":
 		provider = kind.New(o.ClusterName, o.KindOptions)
 	case "minikube":
 		provider = minikube.New()
+	case "k3d":
+		provider = k3d.New(o.ClusterName, o.K3dOptions)
 	case "auto":
-		if kind.IsInstalled() {
+		if k3d.IsInstalled() {
+			provider = k3d.New(o.ClusterName, o.K3dOptions)
+			log.Debug().Msg("Using k3d as cluster provider (auto-detected)")
+		} else if kind.IsInstalled() {
 			provider = kind.New(o.ClusterName, o.KindOptions)
-			log.Debug().Msg("Using kind as cluster provider")
+			log.Debug().Msg("Using kind as cluster provider (auto-detected)")
 		} else if minikube.IsInstalled() {
 			provider = minikube.New()
-			log.Debug().Msg("Using minikube as cluster provider")
+			log.Debug().Msg("Using minikube as cluster provider (auto-detected)")
 		} else {
-			return nil, fmt.Errorf("no local cluster tool found. Please install kind or minikube")
+			return nil, fmt.Errorf("auto-detection failed: no supported provider (k3d, kind, minikube) found in PATH")
 		}
 	default:
-		return nil, fmt.Errorf("unsupported cluster type: %s", o.ClusterType)
+		return nil, fmt.Errorf("invalid cluster type: '%s'. Valid options are kind, minikube, k3d, auto", o.ClusterType)
 	}
 
 	if !provider.IsInstalled() {
-		return nil, fmt.Errorf("%s is not installed", o.ClusterType)
+		return nil, fmt.Errorf("%s is not installed", provider.GetName())
 	}
 
 	return provider, nil
@@ -339,8 +352,11 @@ func (o *Options) LogOptions() {
 	}
 	log.Info().Msgf("✨ - local-cluster-tool: %s", o.clusterProvider.GetName())
 	log.Info().Msgf("✨ - cluster-name: %s", o.ClusterName)
-	if o.KindOptions != "" {
+	if o.clusterProvider.GetName() == "kind" && o.KindOptions != "" {
 		log.Info().Msgf("✨ - kind-options: %s", o.KindOptions)
+	}
+	if o.clusterProvider.GetName() == "k3d" && o.K3dOptions != "" {
+		log.Info().Msgf("✨ - k3d-options: %s", o.K3dOptions)
 	}
 	log.Info().Msgf("✨ - base-branch: %s", o.BaseBranch)
 	log.Info().Msgf("✨ - target-branch: %s", o.TargetBranch)
