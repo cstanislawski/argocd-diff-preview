@@ -1,8 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: my-app
+  name: ignore-annotation-example
   namespace: argocd
+  annotations:
+    argocd-diff-preview/ignore: "true"
 spec:
   project: default
   destination:

@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: my-app-watch-pattern-valid-regex
+  name: manifest-generate-paths-file-not-exist-example
   namespace: argocd
   annotations:
-    argocd-diff-preview/watch-pattern: "examples/helm/charts/myApp/.*, examples/helm/values/filtered"
+    argocd.argoproj.io/manifest-generate-paths: "some-other-path;/examples/helm/values/some-other-file.yaml"
 spec:
   project: default
   destination:
