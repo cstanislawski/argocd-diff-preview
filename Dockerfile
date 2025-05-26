@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1-bookworm AS build
+FROM golang:1.24.1-bookworm AS build
 
 # Build arguments for version information
 ARG VERSION=dev
@@ -34,15 +34,15 @@ RUN curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-${TARGETARCH}
     chmod +x ./kind
 
 # Install Argo CD
-RUN curl -sSL -o argocd-linux-${TARGETARCH} https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-${TARGETARCH} && \
-    install -m 555 argocd-linux-${TARGETARCH} /usr/local/bin/argocd && \
-    rm argocd-linux-${TARGETARCH}
+# RUN curl -sSL -o argocd-linux-${TARGETARCH} https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-${TARGETARCH} && \
+#     install -m 555 argocd-linux-${TARGETARCH} /usr/local/bin/argocd && \
+#     rm argocd-linux-${TARGETARCH}
 
 FROM gcr.io/distroless/static-debian12 AS final
 
 # Copy necessary binaries from the build stage
 COPY --from=build /argocd-diff-preview/kind /usr/local/bin/kind
-COPY --from=build /usr/local/bin/argocd /usr/local/bin/argocd
+# COPY --from=build /usr/local/bin/argocd /usr/local/bin/argocd
 COPY --from=build /argocd-diff-preview/argocd-diff-preview .
 
 # Copy docker from the docker image
