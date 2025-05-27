@@ -212,11 +212,7 @@ func getResourcesFromApp(argocd *argocdPkg.ArgoCDInstallation, app argoapplicati
 		switch appStatus.Status.Sync.Status {
 		case "OutOfSync", "Synced":
 			log.Debug().Str("name", app.GetLongName()).Msg("Extracting manifests from Application")
-			manifests, exists, err := argocd.GetManifests(app.Id)
-			if !exists {
-				return result, fmt.Errorf("application %s does not exist", app.GetLongName())
-			}
-
+			manifests, err := argocd.GetManifests(app.Id)
 			if err != nil {
 				return result, fmt.Errorf("failed to get manifests for application %s: %w", app.GetLongName(), err)
 			}
